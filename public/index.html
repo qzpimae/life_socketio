@@ -13,9 +13,9 @@
 <body>
   <canvas id="gameCanvas" width="600" height="400"></canvas>
   <div>
-    <button id="startButton">Start</button>
+    <!-- <button id="startButton">Start</button>
     <button id="pauseButton">Pause</button>
-    <button id="stepButton">Step</button>
+    <button id="stepButton">Step</button> -->
     <span id="frameCount">Frame: 0</span>
   </div>
 
@@ -32,9 +32,13 @@
     const numCols = Math.floor(canvas.width / cellSize);
 
     let gameState = initializeGameState();
-    let intervalId;
     let isMouseDown = false;
     let cellsToAdd = [];
+    let intervalId = setInterval(() => {
+      gameState = calculateNextGameState();
+      updateGameState(gameState);
+      socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
+    }, 100); // Adjust the interval as needed
 
     function initializeGameState() {
       const state = [];
@@ -146,23 +150,23 @@
       updateGameState(newGameState);
     });
 
-    document.getElementById('startButton').addEventListener('click', () => {
-      intervalId = setInterval(() => {
-        gameState = calculateNextGameState();
-        updateGameState(gameState);
-        socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
-      }, 100); // Adjust the interval as needed
-    });
+    // document.getElementById('startButton').addEventListener('click', () => {
+    //   intervalId = setInterval(() => {
+    //     gameState = calculateNextGameState();
+    //     updateGameState(gameState);
+    //     socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
+    //   }, 100); // Adjust the interval as needed
+    // });
 
-    document.getElementById('pauseButton').addEventListener('click', () => {
-      clearInterval(intervalId);
-    });
+    // document.getElementById('pauseButton').addEventListener('click', () => {
+    //   clearInterval(intervalId);
+    // });
 
-    document.getElementById('stepButton').addEventListener('click', () => {
-      gameState = calculateNextGameState();
-      updateGameState(gameState);
-      socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
-    });
+    // document.getElementById('stepButton').addEventListener('click', () => {
+    //   gameState = calculateNextGameState();
+    //   updateGameState(gameState);
+    //   socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
+    // });
 
   </script>
 </body>

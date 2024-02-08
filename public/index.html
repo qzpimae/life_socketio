@@ -57,6 +57,15 @@
       document.getElementById('frameCount').innerText = `Frame: ${gameState.frame}`;
     }
 
+    function drawPreview() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      draw(); // Draw the current state first
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; // Semi-transparent black for preview cells
+      for (const cell of cellsToAdd) {
+        ctx.fillRect(cell.x * cellSize, cell.y * cellSize, cellSize, cellSize);
+      }
+    }
+
     function updateGameState(newGameState) {
       gameState = newGameState;
       draw();
@@ -100,13 +109,17 @@
       const x = Math.floor(event.offsetX / cellSize);
       const y = Math.floor(event.offsetY / cellSize);
       cellsToAdd.push({ x, y });
+      drawPreview();
     });
 
     canvas.addEventListener('mousemove', (event) => {
       if (isMouseDown) {
         const x = Math.floor(event.offsetX / cellSize);
         const y = Math.floor(event.offsetY / cellSize);
-        cellsToAdd.push({ x, y });
+        if (!cellsToAdd.some(cell => cell.x === x && cell.y === y)) { // Avoid adding duplicate cells
+          cellsToAdd.push({ x, y });
+          drawPreview();
+        }
       }
     });
 
@@ -129,7 +142,7 @@
         gameState = calculateNextGameState();
         updateGameState(gameState);
         socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
-      }, 100); // Adjust the interval as needed
+      }, 75); // Adjust the interval as needed
     });
 
     document.getElementById('pauseButton').addEventListener('click', () => {

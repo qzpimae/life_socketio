@@ -1,6 +1,6 @@
 // Initialise Socket & Get Context of Canvas.
 var socket = io();
-var canvas = document.querySelector(".whiteboard");
+var canvas = document.querySelector(".life-canvas");
 var context = canvas.getContext("2d");
 
 // Configuration.

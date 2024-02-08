@@ -1,14 +1,127 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>life - cellular automata</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <canvas class="whiteboard"></canvas>
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game of Life</title>
+  <style>
+    canvas {
+      border: 1px solid black;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="600" height="400"></canvas>
+  <div>
+    <button id="startButton">Start</button>
+    <button id="pauseButton">Pause</button>
+    <button id="stepButton">Step</button>
+    <span id="frameCount">Frame: 0</span>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.2.0/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const cellSize = 10;
+    const numRows = Math.floor(canvas.height / cellSize);
+    const numCols = Math.floor(canvas.width / cellSize);
+
+    let gameState = initializeGameState();
+    let intervalId;
+
+    function initializeGameState() {
+      const state = [];
+      for (let i = 0; i < numRows; i++) {
+        state.push(new Array(numCols).fill(0));
+      }
+      return {
+        frame: 0,
+        state: state
+      };
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < numRows; i++) {
+        for (let j = 0; j < numCols; j++) {
+          ctx.fillStyle = gameState.state[i][j] ? 'black' : 'white';
+          ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
+        }
+      }
+      document.getElementById('frameCount').innerText = `Frame: ${gameState.frame}`;
+    }
+
+    function updateGameState(newGameState) {
+      gameState = newGameState;
+      draw();
+    }
+
+    function countNeighbors(x, y) {
+      let count = 0;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          if (i === 0 && j === 0) continue; // Skip the current cell
+          const row = (x + i + numRows) % numRows; // Handle edge wrapping
+          const col = (y + j + numCols) % numCols; // Handle edge wrapping
+          count += gameState.state[row][col];
+        }
+      }
+      return count;
+    }
+
+    function calculateNextGameState() {
+      const nextGameState = [];
+      for (let i = 0; i < numRows; i++) {
+        const newRow = [];
+        for (let j = 0; j < numCols; j++) {
+          const neighbors = countNeighbors(i, j);
+          if (gameState.state[i][j]) {
+            newRow.push(neighbors === 2 || neighbors === 3 ? 1 : 0);
+          } else {
+            newRow.push(neighbors === 3 ? 1 : 0);
+          }
+        }
+        nextGameState.push(newRow);
+      }
+      return {
+        frame: gameState.frame + 1,
+        state: nextGameState
+      };
+    }
+
+    canvas.addEventListener('click', (event) => {
+      const x = Math.floor(event.offsetX / cellSize);
+      const y = Math.floor(event.offsetY / cellSize);
+      gameState.state[y][x] = gameState.state[y][x] ? 0 : 1;
+      updateGameState(gameState);
+      socket.emit('updateGameState', gameState);
+    });
+
+    socket.on('updateGameState', (newGameState) => {
+      updateGameState(newGameState);
+    });
+
+    document.getElementById('startButton').addEventListener('click', () => {
+      intervalId = setInterval(() => {
+        gameState = calculateNextGameState();
+        updateGameState(gameState);
+        socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
+      }, 500); // Adjust the interval as needed
+    });
+
+    document.getElementById('pauseButton').addEventListener('click', () => {
+      clearInterval(intervalId);
+    });
+
+    document.getElementById('stepButton').addEventListener('click', () => {
+      gameState = calculateNextGameState();
+      updateGameState(gameState);
+      socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
+    });
+  </script>
+</body>
 </html>

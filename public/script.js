@@ -1,112 +1,142 @@
-// Initialise Socket & Get Context of Canvas.
-var socket = io();
-var canvas = document.querySelector(".life-canvas");
-var context = canvas.getContext("2d");
+    console.log("test");
+    const socket = io();
 
-// Configuration.
-var life = false;
-var current = {
-  color: "black"
-};
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
 
-function throttle(callback, delay) {
-  var previousCall = new Date().getTime();
-  return function () {
-    var time = new Date().getTime();
+    const cellSize = 4;
+    const numRows = Math.floor(canvas.height / cellSize);
+    const numCols = Math.floor(canvas.width / cellSize);
 
-    if (time - previousCall >= delay) {
-      previousCall = time;
-      callback.apply(null, arguments);
+    let gameState = initializeGameState();
+    let intervalId;
+    let isMouseDown = false;
+    let cellsToAdd = [];
+
+    function initializeGameState() {
+      const state = [];
+      for (let i = 0; i < numRows; i++) {
+        const row = [];
+        for (let j = 0; j < numCols; j++) {
+          row.push({ alive: 0, age: 0 });
+        }
+        state.push(row);
+      }
+      return {
+        frame: 0,
+        state: state
+      };
     }
-  };
-}
 
-function drawLine(x0, y0, x1, y1, color, emit) {
-  context.beginPath();
-  context.moveTo(x0, y0);
-  context.lineTo(x1, y1);
-  context.strokeStyle = color;
-  context.lineWidth = 2;
-  context.stroke();
-  context.closePath();
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < numRows; i++) {
+        for (let j = 0; j < numCols; j++) {
+          const cell = gameState.state[i][j];
+          const color = cell.alive ? `hsl(0, 50%, ${((100 - cell.age * 12.75)%50)+50}%)` : `hsl(130, 50%, 30%)`;;
+          ctx.fillStyle = color;
+          ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
+        }
+      }
+      document.getElementById('frameCount').innerText = `Frame: ${gameState.frame}`;
+    }
 
-  if (!emit) {
-    return;
-  }
+    function drawPreview() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        draw(); // Draw the current state first
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; // Semi-transparent black for preview cells
+        for (const cell of cellsToAdd) {
+            ctx.fillRect(cell.x * cellSize, cell.y * cellSize, cellSize, cellSize);
+        }
+        }
 
-  var w = canvas.width;
-  var h = canvas.height;
 
-  socket.emit("life", {
-    x0: x0 / w,
-    y0: y0 / h,
-    x1: x1 / w,
-    y1: y1 / h,
-    color
-  });
-}
+    function updateGameState(newGameState) {
+      gameState = newGameState;
+      draw();
+    }
 
-function onMouseDown(e) {
-  life = true;
-  current.x = e.clientX || e.touches[0].clientX;
-  current.y = e.clientY || e.touches[0].clientY;
-}
+    function countNeighbors(x, y) {
+      let count = 0;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          if (i === 0 && j === 0) continue; // Skip the current cell
+          const row = (x + i + numRows) % numRows; // Handle edge wrapping
+          const col = (y + j + numCols) % numCols; // Handle edge wrapping
+          count += gameState.state[row][col].alive;
+        }
+      }
+      return count;
+    }
 
-function onMouseUp(e) {
-  if (!life) {
-    return;
-  }
-  life = false;
-  drawLine(
-    current.x,
-    current.y,
-    e.clientX || e.touches[0].clientX,
-    e.clientY || e.touches[0].clientY,
-    current.color,
-    true
-  );
-}
+    function calculateNextGameState() {
+      const nextGameState = [];
+      for (let i = 0; i < numRows; i++) {
+        const newRow = [];
+        for (let j = 0; j < numCols; j++) {
+          const neighbors = countNeighbors(i, j);
+          const currentCell = gameState.state[i][j];
+          if (currentCell.alive) {
+            newRow.push({ alive: neighbors === 2 || neighbors === 3 ? 1 : 0, age: neighbors === 2 || neighbors === 3 ? currentCell.age + 1 : 0 });
+          } else {
+            newRow.push({ alive: neighbors === 3 ? 1 : 0, age: neighbors === 3 ? 1 : 0 });
+          }
+        }
+        nextGameState.push(newRow);
+      }
+      return {
+        frame: gameState.frame + 1,
+        state: nextGameState
+      };
+    }
 
-function onMouseMove(e) {
-  if (!life) {
-    return;
-  }
-  drawLine(
-    current.x,
-    current.y,
-    e.clientX || e.touches[0].clientX,
-    e.clientY || e.touches[0].clientY,
-    current.color,
-    true
-  );
-  current.x = e.clientX || e.touches[0].clientX;
-  current.y = e.clientY || e.touches[0].clientY;
-}
+    canvas.addEventListener('mousedown', (event) => {
+      isMouseDown = true;
+      const x = Math.floor(event.offsetX / cellSize);
+      const y = Math.floor(event.offsetY / cellSize);
+      cellsToAdd.push({ x, y });
+      drawPreview()
+    });
 
-// Desktop Events
-canvas.addEventListener("mousedown", onMouseDown, false);
-canvas.addEventListener("mouseup", onMouseUp, false);
-canvas.addEventListener("mouseout", onMouseUp, false);
-canvas.addEventListener("mousemove", throttle(onMouseMove, 10), false);
+    canvas.addEventListener('mousemove', (event) => {
+      if (isMouseDown) {
+        const x = Math.floor(event.offsetX / cellSize);
+        const y = Math.floor(event.offsetY / cellSize);
+        if (!cellsToAdd.some(cell => cell.x === x && cell.y === y)) { // Avoid adding duplicate cells
+          cellsToAdd.push({ x, y });
+          drawPreview()
+        }
+      }
+    });
 
-// Mobile Events
-canvas.addEventListener("touchstart", onMouseDown, false);
-canvas.addEventListener("touchend", onMouseUp, false);
-canvas.addEventListener("touchcancel", onMouseUp, false);
-canvas.addEventListener("touchmove", throttle(onMouseMove, 10), false);
+    canvas.addEventListener('mouseup', () => {
+      isMouseDown = false;
+      for (const cell of cellsToAdd) {
+        gameState.state[cell.y][cell.x] = { alive: 1, age: 1 };
+      }
+      cellsToAdd = [];
+      updateGameState(gameState);
+      socket.emit('updateGameState', gameState);
+    });
 
-function onResize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
+    socket.on('updateGameState', (newGameState) => {
+      updateGameState(newGameState);
+    });
 
-window.addEventListener("resize", onResize, false);
-onResize();
+    document.getElementById('startButton').addEventListener('click', () => {
+      intervalId = setInterval(() => {
+        gameState = calculateNextGameState();
+        updateGameState(gameState);
+        socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
+      }, 100); // Adjust the interval as needed
+    });
 
-function onDrawingEvent(data) {
-  var w = canvas.width;
-  var h = canvas.height;
-  drawLine(data.x0 * w, data.y0 * h, data.x1 * w, data.y1 * h, data.color);
-}
+    document.getElementById('pauseButton').addEventListener('click', () => {
+      clearInterval(intervalId);
+    });
 
-socket.on("life", onDrawingEvent);
+    document.getElementById('stepButton').addEventListener('click', () => {
+      gameState = calculateNextGameState();
+      updateGameState(gameState);
+      socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
+    });

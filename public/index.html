@@ -26,12 +26,14 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    const cellSize = 10;
+    const cellSize = 2;
     const numRows = Math.floor(canvas.height / cellSize);
     const numCols = Math.floor(canvas.width / cellSize);
 
     let gameState = initializeGameState();
     let intervalId;
+    let isMouseDown = false;
+    let cellsToAdd = [];
 
     function initializeGameState() {
       const state = [];
@@ -93,10 +95,27 @@
       };
     }
 
-    canvas.addEventListener('click', (event) => {
+    canvas.addEventListener('mousedown', (event) => {
+      isMouseDown = true;
       const x = Math.floor(event.offsetX / cellSize);
       const y = Math.floor(event.offsetY / cellSize);
-      gameState.state[y][x] = gameState.state[y][x] ? 0 : 1;
+      cellsToAdd.push({ x, y });
+    });
+
+    canvas.addEventListener('mousemove', (event) => {
+      if (isMouseDown) {
+        const x = Math.floor(event.offsetX / cellSize);
+        const y = Math.floor(event.offsetY / cellSize);
+        cellsToAdd.push({ x, y });
+      }
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      isMouseDown = false;
+      for (const cell of cellsToAdd) {
+        gameState.state[cell.y][cell.x] = 1;
+      }
+      cellsToAdd = [];
       updateGameState(gameState);
       socket.emit('updateGameState', gameState);
     });
@@ -110,7 +129,7 @@
         gameState = calculateNextGameState();
         updateGameState(gameState);
         socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
-      }, 500); // Adjust the interval as needed
+      }, 100); // Adjust the interval as needed
     });
 
     document.getElementById('pauseButton').addEventListener('click', () => {

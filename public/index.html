@@ -18,7 +18,7 @@
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas" width="400" height="400"></canvas>
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
   <div>
     <span id="infoSpan">Frame: 0</span>
   </div>
@@ -31,7 +31,7 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    const cellSize = 4;
+    const cellSize = 5;
     const numRows = Math.floor(canvas.height / cellSize);
     const numCols = Math.floor(canvas.width / cellSize);
 
@@ -42,6 +42,8 @@
     let cellsToAdd = [];
 
     let prevGameState = {}
+    let frameAdjustThreshold = 5;
+    let clientRefreshInterval = 100;
 
     let intervalId = setInterval(() => {
 
@@ -54,19 +56,30 @@
       }
 
       // socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
-    }, 120); // Adjust the interval as needed
+    }, clientRefreshInterval); // Adjust the interval as needed
 
     function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // if (gameState.mods.clear) 
+      ctx.fillStyle =`hsla(0,0%,0%, ${Math.sin(gameState.frame/100) * 0.1})`
+
+
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      
       for (let i = 0; i < numRows; i++) {
         for (let j = 0; j < numCols; j++) {
           const cell = gameState.state[i][j];
-          const color = cell.alive ? `hsl(0, 50%, ${((100 - cell.age * 12.75)%50)+50}%)` : `hsl(130, 50%, 30%)`;;
+
+          const hue = 120-cell.age / 5
+          const lightness = ((100 - cell.age * 12.75)%50)+50
+          const color = cell.alive ? `hsl(${hue > 0 ? hue : 0}, 50%, ${lightness}%)` : `hsl(130, 50%, 30%)`;;
+          
           ctx.fillStyle = color;
           if (cell.alive) ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
         }
       }
-      document.getElementById('infoSpan').innerText = `Connected: ${gameState.users} - Frame: ${gameState.frame}`;
+      document.getElementById('infoSpan').innerText = `Connected: ${gameState.users} - Generations: ${gameState.frame} - rr ${clientRefreshInterval}`;
     }
 
     function updateGameState(newGameState) {
@@ -105,7 +118,8 @@
       return {
         users: gameState.users,
         frame: gameState.frame + 1,
-        state: nextGameState
+        state: nextGameState,
+        mods: gameState.mods
       };
     }
 
@@ -114,6 +128,26 @@
       //set true once to inform the client side that the gamestate has be sent at least once by the server
       gameStateInitialized = true;
       serverUpdated = true;
+
+      // Calculate the frame difference between server and client
+      const frameDifference = newGameState.frame - gameState.frame;
+
+      // Adjust client refresh interval based on frame difference
+      if (Math.abs(frameDifference) > frameAdjustThreshold) {
+        // If frame difference is significant, update the client refresh interval
+        if (frameDifference < 0) {
+          // If client is behind the server, decrease refresh interval
+          clientRefreshInterval -= 5; // Decrease refresh interval by 10ms
+        } else {
+          // If client is ahead of the server, increase refresh interval
+          clientRefreshInterval += 5; // Increase refresh interval by 10ms
+        }
+
+        // If client is too far behind or ahead, skip to server's frame and state
+        if (frameDifference > 50 || frameDifference < -50) {
+          gameState = newGameState;
+        }
+      }
 
       updateGameState(newGameState);
     });

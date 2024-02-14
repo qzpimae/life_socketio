@@ -1,4 +1,3 @@
-const { log } = require('console');
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -10,73 +9,69 @@ const io = socketIo(server, {
   pingInterval: 10000 // milliseconds
 });
 
-
-//game of life related vars
-
-const cellSize = 4;
-const canvasHeight = 400;
+const cellSize = 5;
+const canvasHeight = 600;
 const canvasWidth = 400;
 const numRows = Math.floor(canvasHeight / cellSize);
 const numCols = Math.floor(canvasWidth / cellSize);
 
-let usersConnected = 0
+let usersConnected = 0;
+let frameCount = 0;
+const gameMods = {
+  clear: true
+}
+let globalGameState = initializeGameState();
 
-let globalGameState = initializeGameState()
-
-// Serve static files from the "public" directory
 app.use(express.static('public'));
 
 app.get('/check', (req, res) => {
   res.json({
-    connections: io.listenerCount('updateGameState')
-  })
-})
+    connections: usersConnected
+  });
+});
 
-// Socket.IO connection handling
 io.on('connection', (socket) => {
-  usersConnected++
+  usersConnected++;
   console.log('[c] users: ' + usersConnected);
-  // Handle disconnection for this specific socket
+
   socket.on('disconnect', () => {
-    usersConnected--
+    usersConnected--;
     console.log('[d] users: ' + usersConnected);
   });
 });
 
-// // Handle updates to the game state outside of the connection event handler
-// io.on('updateGameState', (newGameState) => {
-//   // Broadcast the new game state to all connected clients
-//   io.emit('updateGameState', newGameState);
-// });
-
-
-function initializeGame () {
+function initializeGame() {
   console.log("Starting game");
   setInterval(() => {
+    frameCount++;
+    console.log(frameCount);
+
     globalGameState = calculateNextGameState();
-    // Broadcast the new game state to all connected clients
-    if (globalGameState.frame % 10 == 0 ) io.emit('updateGameState', globalGameState); 
-
-  }, 120); // Adjust the interval as needed
-
+    
+    if (frameCount % 8 == 0 )io.emit('updateGameState', globalGameState);
+    if (frameCount % 50 == 0) gameMods.clear = !gameMods.clear
+    if (frameCount % 10000 == 0) globalGameState = initializeGameState()
+    
+  }, 100); // Adjust the interval as needed
 }
 
 function initializeGameState() {
+  frameCount = 0;
   const state = [];
   for (let i = 0; i < numRows; i++) {
     const row = [];
     for (let j = 0; j < numCols; j++) {
-      row.push({ alive: Math.round(Math.random()), age: 0 });
+      row.push({ alive: Math.round(Math.random() - .3), age: 0 });
     }
     state.push(row);
   }
   return {
     frame: 0,
     users: usersConnected,
-    state: state
+    state: state,
+    mods: gameMods,
   };
 }
-
 
 function countNeighbors(x, y) {
   let count = 0;
@@ -92,7 +87,6 @@ function countNeighbors(x, y) {
 }
 
 function calculateNextGameState() {
-  // console.log(globalGameState.frame);
   const nextGameState = [];
   for (let i = 0; i < numRows; i++) {
     const newRow = [];
@@ -109,13 +103,14 @@ function calculateNextGameState() {
   }
   return {
     users: usersConnected,
-    frame: globalGameState.frame+1,
-    state: nextGameState
+    frame: frameCount,
+    state: nextGameState,
+    mods: gameMods
   };
 }
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}\nhttp://localhost:${PORT}\n\n`);
-  initializeGame()
+  initializeGame();
 });

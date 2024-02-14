@@ -1,4 +1,3 @@
-const { log } = require('console');
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -10,18 +9,16 @@ const io = socketIo(server, {
   pingInterval: 10000 // milliseconds
 });
 
-
-//game of life related vars
-
+// Game of life related vars
 const cellSize = 4;
 const canvasHeight = 400;
 const canvasWidth = 400;
 const numRows = Math.floor(canvasHeight / cellSize);
 const numCols = Math.floor(canvasWidth / cellSize);
 
-let usersConnected = 0
-
-let globalGameState = initializeGameState()
+let usersConnected = 0;
+let globalGameState = initializeGameState();
+let lastUpdateTime = Date.now();
 
 // Serve static files from the "public" directory
 app.use(express.static('public'));
@@ -29,37 +26,22 @@ app.use(express.static('public'));
 app.get('/check', (req, res) => {
   res.json({
     connections: io.listenerCount('updateGameState')
-  })
-})
-
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-  usersConnected++
-  console.log('[c] users: ' + usersConnected);
-  // Handle disconnection for this specific socket
-  socket.on('disconnect', () => {
-    usersConnected--
-    console.log('[d] users: ' + usersConnected);
   });
 });
 
-// // Handle updates to the game state outside of the connection event handler
-// io.on('updateGameState', (newGameState) => {
-//   // Broadcast the new game state to all connected clients
-//   io.emit('updateGameState', newGameState);
-// });
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  usersConnected++;
+  console.log('[c] users: ' + usersConnected);
+  
+  // Send the initial game state to the client when it connects
+  socket.emit('initialGameState', globalGameState);
 
-
-function initializeGame () {
-  console.log("Starting game");
-  setInterval(() => {
-    globalGameState = calculateNextGameState();
-    // Broadcast the new game state to all connected clients
-    if (globalGameState.frame % 5 == 0 ) io.emit('updateGameState', globalGameState); 
-
-  }, 100); // Adjust the interval as needed
-
-}
+  socket.on('disconnect', () => {
+    usersConnected--;
+    console.log('[d] users: ' + usersConnected);
+  });
+});
 
 function initializeGameState() {
   const state = [];
@@ -77,7 +59,6 @@ function initializeGameState() {
   };
 }
 
-
 function countNeighbors(x, y) {
   let count = 0;
   for (let i = -1; i <= 1; i++) {
@@ -91,8 +72,7 @@ function countNeighbors(x, y) {
   return count;
 }
 
-function calculateNextGameState() {
-  // console.log(globalGameState.frame);
+function calculateNextGameState(elapsedTime) {
   const nextGameState = [];
   for (let i = 0; i < numRows; i++) {
     const newRow = [];
@@ -100,22 +80,31 @@ function calculateNextGameState() {
       const neighbors = countNeighbors(i, j);
       const currentCell = globalGameState.state[i][j];
       if (currentCell.alive) {
-        newRow.push({ alive: neighbors === 2 || neighbors === 3 ? 1 : 0, age: neighbors === 2 || neighbors === 3 ? currentCell.age + 1 : 0 });
+        newRow.push({ alive: neighbors === 2 || neighbors === 3 ? 1 : 0, age: neighbors === 2 || neighbors === 3 ? currentCell.age + elapsedTime : 0 });
       } else {
-        newRow.push({ alive: neighbors === 3 ? 1 : 0, age: neighbors === 3 ? 1 : 0 });
+        newRow.push({ alive: neighbors === 3 ? 1 : 0, age: neighbors === 3 ? elapsedTime : 0 });
       }
     }
     nextGameState.push(newRow);
   }
   return {
     users: usersConnected,
-    frame: globalGameState.frame+1,
+    frame: globalGameState.frame + 1,
     state: nextGameState
   };
 }
 
+function updateGameState() {
+  const currentTime = Date.now();
+  const elapsedTime = currentTime - lastUpdateTime;
+  lastUpdateTime = currentTime;
+  globalGameState = calculateNextGameState(elapsedTime);
+  // Broadcast the new game state to all connected clients
+  io.emit('updateGameState', globalGameState); 
+}
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}\nhttp://localhost:${PORT}\n\n`);
-  initializeGame()
+  console.log(`Server is running on port ${PORT}`);
+  setInterval(updateGameState, 100); // Adjust the interval as needed
 });

@@ -20,12 +20,11 @@
 <body>
   <canvas id="gameCanvas" width="400" height="400"></canvas>
   <div>
-    <span id="infoSpan">Frame: 0</span>
+    <span id="infoSpan">Connected: 0 - Frame: 0</span>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.2.0/socket.io.js"></script>
   <script>
-
     const socket = io();
 
     const canvas = document.getElementById('gameCanvas');
@@ -35,28 +34,28 @@
     const numRows = Math.floor(canvas.height / cellSize);
     const numCols = Math.floor(canvas.width / cellSize);
 
-    let gameState = {};//initializeGameState();
-    let gameStateInitialized = false;
-    let serverUpdated = false;
-    let isMouseDown = false;
-    let cellsToAdd = [];
+    let gameState = null;
 
-    let prevGameState = {}
+    socket.on('initialGameState', (initialState) => {
+      gameState = initialState;
+      initializeGame(gameState);
+    });
 
-    let intervalId = setInterval(() => {
+    socket.on('updateGameState', (newGameState) => {
+      gameState = newGameState;
+      updateGame(gameState);
+    });
 
-      if (gameStateInitialized) {
-        if (!serverUpdated) {
-          updateGameState(calculateNextGameState());
-        }
-        draw()
-        serverUpdated = false
-      }
+    function initializeGame(initialState) {
+      draw();
+    }
 
-      // socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
-    }, 100); // Adjust the interval as needed
+    function updateGame(newGameState) {
+      draw();
+    }
 
     function draw() {
+      if (!gameState) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       for (let i = 0; i < numRows; i++) {
         for (let j = 0; j < numCols; j++) {
@@ -68,56 +67,6 @@
       }
       document.getElementById('infoSpan').innerText = `Connected: ${gameState.users} - Frame: ${gameState.frame}`;
     }
-
-    function updateGameState(newGameState) {
-      gameState = newGameState;
-      // draw();
-    }
-
-    function countNeighbors(x, y) {
-      let count = 0;
-      for (let i = -1; i <= 1; i++) {
-        for (let j = -1; j <= 1; j++) {
-          if (i === 0 && j === 0) continue; // Skip the current cell
-          const row = (x + i + numRows) % numRows; // Handle edge wrapping
-          const col = (y + j + numCols) % numCols; // Handle edge wrapping
-          count += gameState.state[row][col].alive;
-        }
-      }
-      return count;
-    }
-
-    function calculateNextGameState() {
-      const nextGameState = [];
-      for (let i = 0; i < numRows; i++) {
-        const newRow = [];
-        for (let j = 0; j < numCols; j++) {
-          const neighbors = countNeighbors(i, j);
-          const currentCell = gameState.state[i][j];
-          if (currentCell.alive) {
-            newRow.push({ alive: neighbors === 2 || neighbors === 3 ? 1 : 0, age: neighbors === 2 || neighbors === 3 ? currentCell.age + 1 : 0 });
-          } else {
-            newRow.push({ alive: neighbors === 3 ? 1 : 0, age: neighbors === 3 ? 1 : 0 });
-          }
-        }
-        nextGameState.push(newRow);
-      }
-      return {
-        users: gameState.users,
-        frame: gameState.frame + 1,
-        state: nextGameState
-      };
-    }
-
-    socket.on('updateGameState', (newGameState) => {
-      // console.log(newGameState);
-      //set true once to inform the client side that the gamestate has be sent at least once by the server
-      gameStateInitialized = true;
-      serverUpdated = true;
-
-      updateGameState(newGameState);
-    });
-
   </script>
 </body>
 </html>

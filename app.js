@@ -34,11 +34,18 @@ io.on('connection', (socket) => {
   usersConnected++;
   console.log('[c] users: ' + usersConnected);
 
+
+  socket.on('mysteryMod', () => {
+    // console.log("incoming");
+    globalGameState = initializeGameState();
+  })
+
   socket.on('disconnect', () => {
     usersConnected--;
     console.log('[d] users: ' + usersConnected);
   });
 });
+
 
 function initializeGame() {
   console.log("Starting game");
@@ -46,7 +53,7 @@ function initializeGame() {
 
     frameCount++;
     //MAIN LOOP LOG//////////////////////////////////////////////////////
-    // console.log(frameCount);
+    console.log("Plant/Ed Life: " + usersConnected + " - " + frameCount);
 
     globalGameState = calculateNextGameState();
     

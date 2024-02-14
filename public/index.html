@@ -15,12 +15,28 @@
       border: 1px solid black;
       background-color: black;
     }
+
+    #container {
+      align-items: center;
+    }
+
+    #controlButton {
+      font-size: 3em; /* Adjust the font size to make the emoji bigger */
+      padding: 10px 150px; 
+      background-color: rgb(14, 14, 14);
+      align-self: center;
+      /* border-color: #66ff52; */
+      /* border-color: #ff5370; */
+    }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas" width="400" height="600"></canvas>
-  <div>
-    <span id="infoSpan">Frame: 0</span>
+  <div id="container">
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <div>
+      <span id="infoSpan">Loading...</span>
+    </div>
+    <div id="controlsDiv"></div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.2.0/socket.io.js"></script>
@@ -29,6 +45,8 @@
     const socket = io();
 
     const canvas = document.getElementById('gameCanvas');
+    const controlsDiv = document.getElementById('controlsDiv');
+    const controlButton = document.createElement('button')
     const ctx = canvas.getContext('2d');
 
     const cellSize = 5;
@@ -38,12 +56,23 @@
     let gameState = {};//initializeGameState();
     let gameStateInitialized = false;
     let serverUpdated = false;
-    let isMouseDown = false;
-    let cellsToAdd = [];
+    let buttonAvailable = false
+    let buttonTimer = 25
 
-    let prevGameState = {}
     let frameAdjustThreshold = 5;
     let clientRefreshInterval = 100;
+    
+    //add control button into DOM
+    controlButton.innerText = '🌱'
+    controlsDiv.appendChild(controlButton)
+    controlButton.id = 'controlButton'
+    controlButton.onclick = () => {
+      buttonAvailable = false
+      buttonTimer = 25
+      // console.log("update");
+      socket.emit('mysteryMod', true)
+    }
+
 
     let intervalId = setInterval(() => {
 
@@ -80,7 +109,13 @@
         }
       }
       document.getElementById('infoSpan').innerText = `Connected: ${gameState.users} - Generations: ${gameState.frame} - rr ${clientRefreshInterval}`;
+
+      controlButton.style.borderColor = !buttonTimer ? '#66ff52' : '#ff5370'
+      controlButton.disabled = buttonTimer 
+      buttonTimer = buttonTimer > 1 ? buttonTimer-1 : 0
     }
+
+    
 
     function updateGameState(newGameState) {
       gameState = newGameState;

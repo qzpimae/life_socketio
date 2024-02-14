@@ -55,9 +55,9 @@ function initializeGame () {
   setInterval(() => {
     globalGameState = calculateNextGameState();
     // Broadcast the new game state to all connected clients
-    if (globalGameState.frame % 5 == 0 ) io.emit('updateGameState', globalGameState); 
+    if (globalGameState.frame % 10 == 0 ) io.emit('updateGameState', globalGameState); 
 
-  }, 100); // Adjust the interval as needed
+  }, 120); // Adjust the interval as needed
 
 }
 

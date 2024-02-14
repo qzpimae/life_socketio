@@ -13,15 +13,26 @@
     }
     canvas {
       border: 1px solid black;
-      background-color: black;
+      background-color: rgb(0, 0, 0);
     }
 
- 
+    #container {
+      align-items: center;
+    }
+
+    #controlButton {
+      font-size: 3em; /* Adjust the font size to make the emoji bigger */
+      padding: 10px 150px; 
+      background-color: rgb(14, 14, 14);
+      align-self: center;
+      /* border-color: #66ff52; */
+      /* border-color: #ff5370; */
+    }
   </style>
 </head>
 <body>
   <div id="container">
-    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <div id="controlsDiv"></div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.2.0/socket.io.js"></script>
@@ -29,14 +40,21 @@
 
     const socket = io();
 
-    const canvas = document.getElementById('gameCanvas');
+    const canvas = document.createElement('canvas');
+    document.getElementById('container').appendChild(canvas)
+
+    // console.log(window.innerWidth);
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+
     const controlsDiv = document.getElementById('controlsDiv');
     const controlButton = document.createElement('button')
     const ctx = canvas.getContext('2d');
 
-    const cellSize = 5;
-    const numRows = Math.floor(canvas.height / cellSize);
-    const numCols = Math.floor(canvas.width / cellSize);
+    const numRows = 120;
+    const numCols = 80;
+    const cellSize = ((canvas.width / numCols) - ((canvas.width / numCols) % 1))/1.8;
+    // console.log(cellSize);
 
     let gameState = {};//initializeGameState();
     let gameStateInitialized = false;
@@ -46,11 +64,12 @@
 
     let frameAdjustThreshold = 5;
     let clientRefreshInterval = 100;
-    
+    let lastFrameCheck = ''
 
 
-    let intervalId = setInterval(() => {
+    let intervalId = setInterval(gameLoop, clientRefreshInterval); // Adjust the interval as needed
 
+    function gameLoop () {
       if (gameStateInitialized) {
         if (!serverUpdated) {
           updateGameState(calculateNextGameState());
@@ -58,18 +77,22 @@
         draw()
         serverUpdated = false
       }
+    }
 
-      // socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
-    }, clientRefreshInterval); // Adjust the interval as needed
 
     function draw() {
+
+      ctx.save()
       
       // if (gameState.mods.clear) 
       ctx.fillStyle =`hsla(0,0%,0%, ${Math.sin(gameState.frame/100) * 0.1})`
-
-
+      
+      
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
+      ctx.translate(
+        (canvas.width - (cellSize * numRows))/2, 
+        (canvas.height - (cellSize * numCols))/2)
       
       for (let i = 0; i < numRows; i++) {
         for (let j = 0; j < numCols; j++) {
@@ -80,9 +103,11 @@
           const color = cell.alive ? `hsl(${hue > 0 ? hue : 0}, 50%, ${lightness}%)` : `hsl(130, 50%, 30%)`;;
           
           ctx.fillStyle = color;
-          if (cell.alive) ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
+          if (cell.alive) ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
         }
       }
+
+      ctx.restore()
     }
 
     
@@ -129,6 +154,8 @@
     }
 
     socket.on('updateGameState', (newGameState) => {
+
+      lastFrameCheck = gameState.frame + ':' + newGameState.frame
       // console.log(newGameState);
       //set true once to inform the client side that the gamestate has be sent at least once by the server
       gameStateInitialized = true;
@@ -137,10 +164,13 @@
       // Calculate the frame difference between server and client
       const frameDifference = newGameState.frame - gameState.frame;
 
+      //store the current interval to detect change
+      const currentIntervalTime = clientRefreshInterval
+
       // Adjust client refresh interval based on frame difference
       if (Math.abs(frameDifference) > frameAdjustThreshold) {
         // If frame difference is significant, update the client refresh interval
-        if (frameDifference < 0) {
+        if (frameDifference > 0) {
           // If client is behind the server, decrease refresh interval
           clientRefreshInterval -= 5; // Decrease refresh interval by 10ms
         } else {
@@ -152,6 +182,14 @@
         if (frameDifference > 50 || frameDifference < -50) {
           gameState = newGameState;
         }
+      }
+
+        // Check if you need to change the interval time
+      if (clientRefreshInterval != currentIntervalTime) {
+          clearInterval(intervalId); // Clear the existing interval
+
+          // Start a new interval with the updated interval time
+          intervalId = setInterval(gameLoop, clientRefreshInterval);
       }
 
       updateGameState(newGameState);

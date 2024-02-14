@@ -20,9 +20,6 @@
 <body>
   <canvas id="gameCanvas" width="400" height="400"></canvas>
   <div>
-    <!-- <button id="startButton">Start</button>
-    <button id="pauseButton">Pause</button>
-    <button id="stepButton">Step</button> -->
     <span id="infoSpan">Frame: 0</span>
   </div>
 
@@ -40,36 +37,27 @@
 
     let gameState = {};//initializeGameState();
     let gameStateInitialized = false;
+    let serverUpdated = false;
     let isMouseDown = false;
     let cellsToAdd = [];
+
+    let prevGameState = {}
+
     let intervalId = setInterval(() => {
+
       if (gameStateInitialized) {
+        if (!serverUpdated) {
+          updateGameState(calculateNextGameState());
+        }
         draw()
+        serverUpdated = false
       }
 
-
-      // gameState = calculateNextGameState();
-      // updateGameState(gameState);
       // socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
-    }, 30); // Adjust the interval as needed
-
-    // function initializeGameState() {
-    //   const state = [];
-    //   for (let i = 0; i < numRows; i++) {
-    //     const row = [];
-    //     for (let j = 0; j < numCols; j++) {
-    //       row.push({ alive: Math.round(Math.random()), age: 0 });
-    //     }
-    //     state.push(row);
-    //   }
-    //   return {
-    //     frame: 0,
-    //     state: state
-    //   };
-    // }
+    }, 100); // Adjust the interval as needed
 
     function draw() {
-      // ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       for (let i = 0; i < numRows; i++) {
         for (let j = 0; j < numCols; j++) {
           const cell = gameState.state[i][j];
@@ -81,109 +69,54 @@
       document.getElementById('infoSpan').innerText = `Connected: ${gameState.users} - Frame: ${gameState.frame}`;
     }
 
-    // function drawPreview() {
-    //     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    //     draw(); // Draw the current state first
-    //     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; // Semi-transparent black for preview cells
-    //     for (const cell of cellsToAdd) {
-    //         ctx.fillRect(cell.x * cellSize, cell.y * cellSize, cellSize, cellSize);
-    //     }
-    //     }
-
-
     function updateGameState(newGameState) {
       gameState = newGameState;
       // draw();
     }
 
-    // function countNeighbors(x, y) {
-    //   let count = 0;
-    //   for (let i = -1; i <= 1; i++) {
-    //     for (let j = -1; j <= 1; j++) {
-    //       if (i === 0 && j === 0) continue; // Skip the current cell
-    //       const row = (x + i + numRows) % numRows; // Handle edge wrapping
-    //       const col = (y + j + numCols) % numCols; // Handle edge wrapping
-    //       count += gameState.state[row][col].alive;
-    //     }
-    //   }
-    //   return count;
-    // }
+    function countNeighbors(x, y) {
+      let count = 0;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          if (i === 0 && j === 0) continue; // Skip the current cell
+          const row = (x + i + numRows) % numRows; // Handle edge wrapping
+          const col = (y + j + numCols) % numCols; // Handle edge wrapping
+          count += gameState.state[row][col].alive;
+        }
+      }
+      return count;
+    }
 
-    // function calculateNextGameState() {
-    //   const nextGameState = [];
-    //   for (let i = 0; i < numRows; i++) {
-    //     const newRow = [];
-    //     for (let j = 0; j < numCols; j++) {
-    //       const neighbors = countNeighbors(i, j);
-    //       const currentCell = gameState.state[i][j];
-    //       if (currentCell.alive) {
-    //         newRow.push({ alive: neighbors === 2 || neighbors === 3 ? 1 : 0, age: neighbors === 2 || neighbors === 3 ? currentCell.age + 1 : 0 });
-    //       } else {
-    //         newRow.push({ alive: neighbors === 3 ? 1 : 0, age: neighbors === 3 ? 1 : 0 });
-    //       }
-    //     }
-    //     nextGameState.push(newRow);
-    //   }
-    //   return {
-    //     frame: gameState.frame + 1,
-    //     state: nextGameState
-    //   };
-    // }
-
-    // canvas.addEventListener('mousedown', (event) => {
-    //   isMouseDown = true;
-    //   const x = Math.floor(event.offsetX / cellSize);
-    //   const y = Math.floor(event.offsetY / cellSize);
-    //   cellsToAdd.push({ x, y });
-    //   drawPreview()
-    // });
-
-    // canvas.addEventListener('mousemove', (event) => {
-    //   if (isMouseDown) {
-    //     const x = Math.floor(event.offsetX / cellSize);
-    //     const y = Math.floor(event.offsetY / cellSize);
-    //     if (!cellsToAdd.some(cell => cell.x === x && cell.y === y)) { // Avoid adding duplicate cells
-    //       cellsToAdd.push({ x, y });
-    //       drawPreview()
-    //     }
-    //   }
-    // });
-
-    // canvas.addEventListener('mouseup', () => {
-    //   isMouseDown = false;
-    //   for (const cell of cellsToAdd) {
-    //     gameState.state[cell.y][cell.x] = { alive: 1, age: 1 };
-    //   }
-    //   cellsToAdd = [];
-    //   updateGameState(gameState);
-    //   socket.emit('updateGameState', gameState);
-    // });
+    function calculateNextGameState() {
+      const nextGameState = [];
+      for (let i = 0; i < numRows; i++) {
+        const newRow = [];
+        for (let j = 0; j < numCols; j++) {
+          const neighbors = countNeighbors(i, j);
+          const currentCell = gameState.state[i][j];
+          if (currentCell.alive) {
+            newRow.push({ alive: neighbors === 2 || neighbors === 3 ? 1 : 0, age: neighbors === 2 || neighbors === 3 ? currentCell.age + 1 : 0 });
+          } else {
+            newRow.push({ alive: neighbors === 3 ? 1 : 0, age: neighbors === 3 ? 1 : 0 });
+          }
+        }
+        nextGameState.push(newRow);
+      }
+      return {
+        users: gameState.users,
+        frame: gameState.frame + 1,
+        state: nextGameState
+      };
+    }
 
     socket.on('updateGameState', (newGameState) => {
       // console.log(newGameState);
       //set true once to inform the client side that the gamestate has be sent at least once by the server
       gameStateInitialized = true;
+      serverUpdated = true;
 
       updateGameState(newGameState);
     });
-
-    // document.getElementById('startButton').addEventListener('click', () => {
-    //   intervalId = setInterval(() => {
-    //     gameState = calculateNextGameState();
-    //     updateGameState(gameState);
-    //     socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
-    //   }, 100); // Adjust the interval as needed
-    // });
-
-    // document.getElementById('pauseButton').addEventListener('click', () => {
-    //   clearInterval(intervalId);
-    // });
-
-    // document.getElementById('stepButton').addEventListener('click', () => {
-    //   gameState = calculateNextGameState();
-    //   updateGameState(gameState);
-    //   socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
-    // });
 
   </script>
 </body>

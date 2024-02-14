@@ -52,10 +52,11 @@ io.on('connection', (socket) => {
 
 function initializeGame () {
   console.log("Starting game");
-
   setInterval(() => {
     globalGameState = calculateNextGameState();
-    io.emit('updateGameState', globalGameState); // Broadcast the new game state to all connected clients
+    // Broadcast the new game state to all connected clients
+    if (globalGameState.frame % 5 == 0 ) io.emit('updateGameState', globalGameState); 
+
   }, 100); // Adjust the interval as needed
 
 }

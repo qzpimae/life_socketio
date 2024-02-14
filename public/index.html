@@ -61,6 +61,7 @@
 
     let frameAdjustThreshold = 5;
     let clientRefreshInterval = 100;
+    let lastFrameCheck = ''
     
     //add control button into DOM
     controlButton.innerText = '🌱'
@@ -74,8 +75,9 @@
     }
 
 
-    let intervalId = setInterval(() => {
+    let intervalId = setInterval(gameLoop, clientRefreshInterval); // Adjust the interval as needed
 
+    function gameLoop () {
       if (gameStateInitialized) {
         if (!serverUpdated) {
           updateGameState(calculateNextGameState());
@@ -83,9 +85,8 @@
         draw()
         serverUpdated = false
       }
+    }
 
-      // socket.emit('updateGameState', gameState); // Broadcast the new game state to all connected clients
-    }, clientRefreshInterval); // Adjust the interval as needed
 
     function draw() {
       
@@ -108,7 +109,7 @@
           if (cell.alive) ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
         }
       }
-      document.getElementById('infoSpan').innerText = `Connected: ${gameState.users} - Generations: ${gameState.frame} - rr ${clientRefreshInterval}`;
+      document.getElementById('infoSpan').innerText = `Connected: ${gameState.users} - Generations: ${gameState.frame} - rr ${clientRefreshInterval} - lfc ${lastFrameCheck}`;
 
       controlButton.style.borderColor = !buttonTimer ? '#66ff52' : '#ff5370'
       controlButton.disabled = buttonTimer 
@@ -159,6 +160,8 @@
     }
 
     socket.on('updateGameState', (newGameState) => {
+
+      lastFrameCheck = gameState.frame + ':' + newGameState.frame
       // console.log(newGameState);
       //set true once to inform the client side that the gamestate has be sent at least once by the server
       gameStateInitialized = true;
@@ -167,10 +170,13 @@
       // Calculate the frame difference between server and client
       const frameDifference = newGameState.frame - gameState.frame;
 
+      //store the current interval to detect change
+      const currentIntervalTime = clientRefreshInterval
+
       // Adjust client refresh interval based on frame difference
       if (Math.abs(frameDifference) > frameAdjustThreshold) {
         // If frame difference is significant, update the client refresh interval
-        if (frameDifference < 0) {
+        if (frameDifference > 0) {
           // If client is behind the server, decrease refresh interval
           clientRefreshInterval -= 5; // Decrease refresh interval by 10ms
         } else {
@@ -182,6 +188,14 @@
         if (frameDifference > 50 || frameDifference < -50) {
           gameState = newGameState;
         }
+      }
+
+        // Check if you need to change the interval time
+      if (clientRefreshInterval != currentIntervalTime) {
+          clearInterval(intervalId); // Clear the existing interval
+
+          // Start a new interval with the updated interval time
+          intervalId = setInterval(gameLoop, clientRefreshInterval);
       }
 
       updateGameState(newGameState);

@@ -43,8 +43,10 @@ io.on('connection', (socket) => {
 function initializeGame() {
   console.log("Starting game");
   setInterval(() => {
+
     frameCount++;
-    console.log(frameCount);
+    //MAIN LOOP LOG//////////////////////////////////////////////////////
+    // console.log(frameCount);
 
     globalGameState = calculateNextGameState();
     

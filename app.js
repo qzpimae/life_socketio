@@ -1,3 +1,4 @@
+const { time } = require('console');
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -17,6 +18,9 @@ const numCols = Math.floor(canvasWidth / cellSize);
 
 let usersConnected = 0;
 let frameCount = 0;
+
+let uTime = Date.now()
+let uTimeLast = uTime;
 const gameMods = {
   clear: true
 }
@@ -50,10 +54,16 @@ io.on('connection', (socket) => {
 function initializeGame() {
   console.log("Starting game");
   setInterval(() => {
+    
+    //set time
+    uTimeLast = uTime;
+    uTime = Date.now()
+
 
     frameCount++;
-    //MAIN LOOP LOG//////////////////////////////////////////////////////
-    console.log("Plant/Ed Life: " + usersConnected + " - " + frameCount);
+    
+    //MAIN LOOP LOG//////////////////////////////////////////////////////a
+    console.log("gqz - cellular automata - Plant/Ed - UsersConnected: " + usersConnected + " _ Generation: " + frameCount + " _ MsSinceLastGen: " + (uTime-uTimeLast));
 
     globalGameState = calculateNextGameState();
     

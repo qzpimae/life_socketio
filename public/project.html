@@ -34,6 +34,9 @@
   <div id="container">
     <div id="controlsDiv"></div>
   </div>
+  <div>
+    <span id="infoSpan">Loading...</span>
+  </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.2.0/socket.io.js"></script>
   <script>
@@ -59,13 +62,10 @@
     let gameState = {};//initializeGameState();
     let gameStateInitialized = false;
     let serverUpdated = false;
-    let buttonAvailable = false
-    let buttonTimer = 25
-
     let globalProjectTime = 0;
 
     let frameAdjustThreshold = 5;
-    let clientRefreshInterval = 30;
+    let clientRefreshInterval = 50;
     let lastFrameCheck = ''
 
 
@@ -82,7 +82,7 @@
             timeMax = 444,
             
             time = timeMax,
-	        timeDec = .5,
+	          timeDec = .5,
 
             frames = 0,
 
@@ -110,40 +110,40 @@
 
     function gameLoop () {
     
-      if (gameStateInitialized) {
 
-        if (!serverUpdated) {
-          updateGameState(calculateNextGameState());
-        }
+      document.getElementById('infoSpan').innerText = `Connected: ${gameState.users} - Generations: ${gameState.frame} - RefreshRate: ${clientRefreshInterval}ms - LatestFrameCount: ${lastFrameCheck} [ wifi: CBCI-B6DO, pass: curve9875circle, website: http://10.1.10.86:3333 ]`;
+      //render BG animation
+      ctx.save()
 
+        //RENDER OF BG
         globalProjectTime++
         if (globalProjectTime % 2500 == 0) {
           bgRenderOpt = !bgRenderOpt
         }
+        if (bgRenderOpt) {
+          ctx.translate(width/2, height/2)
+          render1()
+        } else {
+          render3()
+        }
 
-             //render BG animation
-            ctx.save()
-            //SET THE CANVAS ORIGIN TO THE MIDDLE OF THE WINDOW
-            
-            if (bgRenderOpt) {
-              ctx.translate(width/2, height/2)
-              render1()
-            } else {
-              render3()
-            }
+        //RENDER OF LIFE
+        if (gameStateInitialized && globalProjectTime % 2 == 0) {
 
-            ctx.restore()
+          if (!serverUpdated) {
+            updateGameState(calculateNextGameState());
+          }
 
-        draw()
-        // console.log(isLight, gameState.frame, time, clientRefreshInterval);
-        serverUpdated = false
-      }
+              ctx.restore()
+
+          draw()
+          // console.log(isLight, gameState.frame, time, clientRefreshInterval);
+          serverUpdated = false
+        }
     }
 
 
     function draw() {
-
-   
 
       ctx.save()
 
@@ -219,7 +219,7 @@
 
     socket.on('updateGameState', (newGameState) => {
 
-        lastFrameCheck = gameState.frame + ':' + newGameState.frame
+      lastFrameCheck = '{ local:' + gameState.frame + ', server:' + newGameState.frame + '}'
       // console.log(newGameState);
       //set true once to inform the client side that the gamestate has be sent at least once by the server
       gameStateInitialized = true;
@@ -255,7 +255,7 @@
           clearInterval(intervalId); // Clear the existing interval
 
           // Start a new interval with the updated interval time
-          intervalId = setInterval(gameLoop, 30);
+          intervalId = setInterval(gameLoop, clientRefreshInterval);
       }
 
       updateGameState(newGameState);
@@ -799,36 +799,6 @@ class SimplexNoise {
 
         return randomNumber;
         }
-
-
-        function findObjectCoords(mouseEvent) {
-
-        let obj = canvas,
-        obj_left = 0,
-        obj_top = 0,
-        xpos,
-        ypos;
-
-        while (obj.offsetParent)
-        {
-        obj_left += obj.offsetLeft;
-        obj_top += obj.offsetTop;
-        obj = obj.offsetParent;
-        }
-        if (mouseEvent)
-        {
-        xpos = mouseEvent.pageX;
-        ypos = mouseEvent.pageY;
-        }
-
-        xpos -= obj_left;
-        ypos -= obj_top;
-
-        mosPos.x = xpos
-        mosPos.y = ypos
-
-        }
-
 
   </script>
 </body>

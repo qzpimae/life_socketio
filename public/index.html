@@ -96,7 +96,7 @@
 
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      
+      //DRAW 
       for (let i = 0; i < numRows; i++) {
         for (let j = 0; j < numCols; j++) {
           const cell = gameState.state[i][j];
@@ -109,7 +109,7 @@
           if (cell.alive) ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
         }
       }
-      document.getElementById('infoSpan').innerText = `Connected: ${gameState.users} - Generations: ${gameState.frame} - rr ${clientRefreshInterval} - lfc ${lastFrameCheck}`;
+      document.getElementById('infoSpan').innerText = `Connected: ${gameState.users} - Generations: ${gameState.frame} - rr ${clientRefreshInterval} - lfc ${lastFrameCheck} `;
 
       controlButton.style.borderColor = !buttonTimer ? '#66ff52' : '#ff5370'
       controlButton.disabled = buttonTimer 

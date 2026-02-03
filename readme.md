@@ -1,4 +1,5 @@
 # * project created for the Plant/ED gallery exibition at Fall River Museum of Contemporary Art *
+![](exhibit-photo-wall.jpeg)
 
 this program ran on the muesum's local network and allowed guest to interact with the exibit by "seeding" the game of life simulation. 
 there was a host computer that ran the node server and displays a live feed/log of the simulation via the terminal. 
@@ -27,3 +28,5 @@ even now, i dont aim to tell you what this means, what importance this has in th
 feel free to download and test this out project on your local network. just follow the following steps [here](https://github.com/qzpimae/life_socketio/tree/main/how-to-run)
 
 if you would like to see where ive gone with my cellular automata journey, check out my latest game-of-life project. its a painting app! learn more about it [here](https://sacred-web.vercel.app/paint/about) 
+
+![](exhibit-photo-desk.jpeg)

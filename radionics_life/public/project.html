@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game of Life</title>
+  <style>
+    body {
+      background-color: black;
+	cursor: none;
+    }
+    span {
+      color: white;
+    }
+    canvas {
+      border: 1px solid black;
+      background-color: rgb(0, 0, 0);
+    }
+
+    #container {
+      align-items: center;
+    }
+
+    #controlButton {
+      font-size: 3em; /* Adjust the font size to make the emoji bigger */
+      padding: 10px 150px; 
+      background-color: rgb(14, 14, 14);
+      align-self: center;
+      /* border-color: #66ff52; */
+      /* border-color: #ff5370; */
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="controlsDiv"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.2.0/socket.io.js"></script>
+  <script>
+
+    const socket = io();
+
+    const canvas = document.createElement('canvas');
+    document.getElementById('container').appendChild(canvas)
+
+    // console.log(window.innerWidth);
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+
+    const controlsDiv = document.getElementById('controlsDiv');
+    const controlButton = document.createElement('button')
+    const ctx = canvas.getContext('2d');
+
+    const numRows = 120;
+    const numCols = 80;
+    const cellSize = ((canvas.width / numCols) - ((canvas.width / numCols) % 1))/1.8;
+    // console.log(cellSize);
+
+    let gameState = {};//initializeGameState();
+    let gameStateInitialized = false;
+    let serverUpdated = false;
+    let buttonAvailable = false
+    let buttonTimer = 25
+
+    let globalProjectTime = 0;
+
+    let frameAdjustThreshold = 5;
+    let clientRefreshInterval = 60;
+    let lastFrameCheck = ''
+
+
+    let intervalId = setInterval(gameLoop, clientRefreshInterval); // Adjust the interval as needed
+
+    const {round, random, sqrt, PI, floor, sin, cos} = Math;
+        
+        const p = [...Array(512)].map(() => floor(random() * 255)); //used for perlin noise
+
+        let seed = random();
+        //VARS FOR CANVAS AND TIMING EVENTS
+        let width = canvas.width = window.innerWidth,
+            height = canvas.height = window.innerHeight,
+            timeMax = 444,
+            
+            time = timeMax,
+	        timeDec = .5,
+
+            frames = 0,
+
+            strokeW = 3,
+
+            pauseAnimation = false,
+
+            tiltWindow = true,
+
+            colorIndex = 0,
+
+            angleMult = 1,
+
+            startColor = random() * 360,
+            
+            greyScale = true,
+            
+            resetPeriod = false,
+
+            isLight = true;
+
+
+    //switch for bg renders
+    let bgRenderOpt = false;
+
+    document.addEventListener('keydown', () => {
+	socket.emit('mysteryMod', true);
+    }, false)
+
+    function gameLoop () {
+    
+      if (gameStateInitialized) {
+
+        if (!serverUpdated) {
+          updateGameState(calculateNextGameState());
+        }
+
+        globalProjectTime++
+        if (globalProjectTime % 1500 == 0) {
+          bgRenderOpt = !bgRenderOpt
+        }
+
+             //render BG animation
+            ctx.save()
+            //SET THE CANVAS ORIGIN TO THE MIDDLE OF THE WINDOW
+            
+            if (bgRenderOpt) {
+              ctx.translate(width/2, height/2)
+              render1()
+            } else {
+              render3()
+            }
+
+            ctx.restore()
+
+        draw()
+        // console.log(isLight, gameState.frame, time, clientRefreshInterval);
+        serverUpdated = false
+      }
+    }
+
+
+    function draw() {
+
+   
+
+      ctx.save()
+
+      //render Game of life
+      
+      // if (gameState.mods.clear) 
+      ctx.strokeStyle = 'black'
+      ctx.fillStyle =`hsla(0,0%,0%, ${Math.sin(gameState.frame/100) * 0.1})`
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.translate(
+        (canvas.width - (cellSize * numRows))/2, 
+        (canvas.height - (cellSize * numCols))/2)
+      
+      for (let i = 0; i < numRows; i++) {
+        for (let j = 0; j < numCols; j++) {
+          const cell = gameState.state[i][j];
+
+          const hue = 120-cell.age / 5
+          const lightness = ((100 - cell.age * 12.75)%50)+50
+          const color = cell.alive ? `hsl(${hue > 0 ? hue : 0}, 50%, ${lightness}%)` : `hsl(130, 50%, 30%)`;;
+          
+          ctx.fillStyle = color;
+          if (cell.alive) ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
+        }
+      }
+
+      ctx.restore()
+    }
+
+    
+
+    function updateGameState(newGameState) {
+      gameState = newGameState;
+      // draw();
+    }
+
+    function countNeighbors(x, y) {
+      let count = 0;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          if (i === 0 && j === 0) continue; // Skip the current cell
+          const row = (x + i + numRows) % numRows; // Handle edge wrapping
+          const col = (y + j + numCols) % numCols; // Handle edge wrapping
+          count += gameState.state[row][col].alive;
+        }
+      }
+      return count;
+    }
+
+    function calculateNextGameState() {
+      const nextGameState = [];
+      for (let i = 0; i < numRows; i++) {
+        const newRow = [];
+        for (let j = 0; j < numCols; j++) {
+          const neighbors = countNeighbors(i, j);
+          const currentCell = gameState.state[i][j];
+          if (currentCell.alive) {
+            newRow.push({ alive: neighbors === 2 || neighbors === 3 ? 1 : 0, age: neighbors === 2 || neighbors === 3 ? currentCell.age + 1 : 0 });
+          } else {
+            newRow.push({ alive: neighbors === 3 ? 1 : 0, age: neighbors === 3 ? 1 : 0 });
+          }
+        }
+        nextGameState.push(newRow);
+      }
+      return {
+        users: gameState.users,
+        frame: gameState.frame + 1,
+        state: nextGameState,
+        mods: gameState.mods
+      };
+    }
+
+    socket.on('updateGameState', (newGameState) => {
+
+        lastFrameCheck = gameState.frame + ':' + newGameState.frame
+      // console.log(newGameState);
+      //set true once to inform the client side that the gamestate has be sent at least once by the server
+      gameStateInitialized = true;
+      serverUpdated = true;
+
+      // Calculate the frame difference between server and client
+      const frameDifference = newGameState.frame - gameState.frame;
+
+      //store the current interval to detect change
+      const currentIntervalTime = clientRefreshInterval
+
+      // Adjust client refresh interval based on frame difference
+      if (Math.abs(frameDifference) > frameAdjustThreshold) {
+        // If frame difference is significant, update the client refresh interval
+        if (frameDifference > 0) {
+          // If client is behind the server, decrease refresh interval
+          clientRefreshInterval -= 5; // Decrease refresh interval by 10ms
+        } else {
+          // If client is ahead of the server, increase refresh interval
+          clientRefreshInterval += 5; // Increase refresh interval by 10ms
+        }
+
+        // If client is too far behind or ahead, skip to server's frame and state
+        if (frameDifference > 50 || frameDifference < -50) {
+          gameState = newGameState;
+        }
+
+        clientRefreshInterval = clientRefreshInterval < 10 ? 10 : clientRefreshInterval
+      }
+
+        // Check if you need to change the interval time
+      if (clientRefreshInterval != currentIntervalTime) {
+          clearInterval(intervalId); // Clear the existing interval
+
+          // Start a new interval with the updated interval time
+          intervalId = setInterval(gameLoop, 60);
+      }
+
+      updateGameState(newGameState);
+    });
+
+
+        
+
+
+                function resetAnimation () {
+                    frames = 0;
+                    isLight = !isLight
+                    timeMax = round(random() * 100 + 250)
+                    time = timeMax;  
+                    seed = random(); 
+                    startColor = random() * 360; 
+                    angleMult = (random() * 3) + .333;
+
+
+                }
+
+                function render1() {
+
+                ctx.strokeStyle = 'white';
+                // ctx.fillStyle = 'white';
+
+                ctx.lineWidth = strokeW;
+
+                frames++;
+
+                if (time > 1) {
+                        createImg(time)
+                        time-=timeDec
+                } else if ( time <= 1){
+                    resetAnimation();
+                   
+                }
+                
+                   
+            }
+
+        function createImg(s) { 
+
+            let 
+                mNoise = perlin2D(s/333+seed,s/333+seed)*11*(1+seed/10),
+                light = isLight ? 100 : 0,
+
+                alpha = sin(time/timeMax) * (mapNumber(time, 0, timeMax, 1, 0));//mapNumber(time, 0, timeMax, 1, 0),
+                
+
+                    // console.log(color)
+
+            if (!isLight) alpha *= -1;
+            ctx.lineWidth = isLight ? .3 : .5;
+
+            const color = `hsla(
+                    ${greyScale ? 0 : s*3+startColor}, 
+                    ${greyScale ? 0 : 70}%, 
+                    ${light}%,
+                    ${alpha})`;
+            
+            ctx.strokeStyle = color;//greyScale ? `hsla(0, 0%, ${light}%)` : `hsl(${s*3+startColor}, 70%, ${light}%, ${alpha})`
+
+            ctx.save()
+
+            if (tiltWindow) ctx.rotate(PI/2);
+                    mNoise/=2;
+                    seven_meta_cubes(s, (mNoise)/2)
+                    seven_meta_cubes(s, (mNoise+PI)/2)
+                    seven_meta_cubes(s, -(mNoise)/2)
+                    seven_meta_cubes(s, -(mNoise+PI)/2)
+
+            ctx.restore()
+        }
+
+        function seven_meta_cubes(s, a) {
+
+            let m = 6.93;
+
+            ctx.save()
+
+                ctx.translate(-s*m/4*1.07, 0)
+                createRombi({size: s, angle: a})
+                ctx.translate(s*m/4*1.07, 0)
+                createRombi({size: s*1.5, angle: a*2})
+                ctx.translate(s*m/4*1.07, 0)
+                createRombi({size: s, angle: a})
+                
+            ctx.restore()
+
+            ctx.save()
+
+                ctx.translate(-s*m/8*1.0714, -s*m*sqrt(3)/8*1.2)
+                createRombi({size: s, angle: a})
+                ctx.translate(0, s*3*1.2)
+                createRombi({size: s, angle: a})
+                
+            ctx.restore()
+
+            ctx.save()
+
+                ctx.translate(s*m/8*1.0714, -s*m*sqrt(3)/8*1.2)
+                createRombi({size: s, angle: a})
+                ctx.translate(0, s*3*1.2)
+                createRombi({size: s, angle: a})
+                
+            ctx.restore()
+
+        }
+
+        function createRombi(rombiObj) {
+            const {size, angle} = rombiObj;
+            ctx.save()
+
+            if (angle) ctx.rotate(angle * angleMult);
+
+            ctx.beginPath()
+                ctx.beginPath()
+                ctx.moveTo(size/2,0);
+                ctx.lineTo(0,-size)
+                ctx.lineTo(-size/2,0)
+                ctx.lineTo(0,size)
+                ctx.lineTo(size/2,0)
+                    ctx.stroke()
+
+            ctx.restore()
+        }
+
+
+        function clearFullScreen() {
+
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.restore();
+            
+        }
+
+        function mapNumber (number, min1, max1, min2, max2) {
+            return ((number - min1) * (max2 - min2) / (max1 - min1) + min2);
+        };
+
+
+        ///PERLIN NOISE (written with chat-gpt)
+        //
+        //
+        //
+        ////
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        ////
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        ////
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        ////
+        //
+        //
+        //
+        //
+        //
+        //
+
+
+
+
+
+
+        function fade(t) {
+            return t * t * t * (t * (t * 6 - 15) + 10);
+        }
+        
+        function lerp(t, a, b) {
+            return a + t * (b - a);
+        }
+        
+        function grad(hash, x) {
+            const h = hash & 1;
+            return h === 0 ? x : -x;
+        }
+        
+        function grad2(hash, x, y) {
+            const h = hash & 7;
+            const u = h < 4 ? x : y;
+            const v = h < 4 ? y : x;
+            return (h & 1 ? -u : u) + (h & 2 ? -2.0 * v : 2.0 * v);
+        }
+        
+        
+        function perlin2D(x, y) {
+            const X = floor(x) & 255;
+            const Y = floor(y) & 255;
+            x -= floor(x);
+            y -= floor(y);
+            const fadeX = fade(x);
+            const fadeY = fade(y);
+        
+            const a = p[X] + Y;
+            const b = p[X + 1] + Y;
+        
+            return lerp(fadeY, lerp(fadeX, grad(p[a], x), grad(p[b], x - 1)),
+                                lerp(fadeX, grad(p[a + 1], x - 1), grad(p[b + 1], x - 1)));
+        }
+
+
+
+
+
+class SimplexNoise {
+    constructor() {
+        // To remove the need for index wrapping, double the permutation table length
+        this.perm = new Array(512);
+        this.grad3 = [
+            [1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0],
+            [1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1],
+            [0, 1, 1], [0, -1, 1], [0, 1, -1], [0, -1, -1]
+        ];
+
+        this.seed(0);
+    }
+
+    seed(seed) {
+        if (seed > 0 && seed < 1) {
+            // Scale the seed for consistency
+            seed *= 65536;
+        }
+
+        seed = Math.floor(seed);
+
+        if (seed < 256) {
+            seed |= seed << 8;
+        }
+
+        for (let i = 0; i < 256; i++) {
+            let v;
+            if (i & 1) {
+                v = this.perm[i] ^ (seed & 255);
+            } else {
+                v = this.perm[i] ^ ((seed >> 8) & 255);
+            }
+
+            this.perm[i + 256] = this.perm[i] = v;
+        }
+    }
+
+
+
+    noise(xin, yin) {
+        // Noise contributions from the three corners
+        let n0, n1, n2;
+
+        // Skewing/Unskewing factors for 2D
+        const F2 = 0.5 * (Math.sqrt(3.0) - 1.0);
+        const G2 = (3.0 - Math.sqrt(3.0)) / 6.0;
+
+        // Noise contributions from the first corner
+        let s = (xin + yin) * F2;
+        let i = Math.floor(xin + s);
+        let j = Math.floor(yin + s);
+        const t = (i + j) * G2;
+        const X0 = i - t; // Unskew the cell origin back to (x, y) space
+        const Y0 = j - t;
+        const x0 = xin - X0; // The x, y distances from the cell origin
+        const y0 = yin - Y0;
+
+        // For the 2D case, the simplex shape is an equilateral triangle.
+        // Determine which simplex we are in.
+        let i1, j1; // Offsets for second (middle) corner of simplex in (i, j) coords
+        if (x0 > y0) {
+            i1 = 1;
+            j1 = 0;
+        } else {
+            i1 = 0;
+            j1 = 1;
+        }
+
+        // A step of (1, 0) in (i, j) means a step of (1 - c, -c) in (x, y), and
+        // a step of (0, 1) in (i, j) means a step of (-c, 1 - c) in (x, y), where
+        // c = (3 - sqrt(3))/6
+
+        const x1 = x0 - i1 + G2; // Offsets for middle corner in (x, y) unskewed coords
+        const y1 = y0 - j1 + G2;
+        const x2 = x0 - 1.0 + 2.0 * G2; // Offsets for last corner in (x, y) unskewed coords
+        const y2 = y0 - 1.0 + 2.0 * G2;
+
+        // Work out the hashed gradient indices of the three simplex corners
+        const ii = i & 255;
+        const jj = j & 255;
+        const gi0 = this.perm[ii + this.perm[jj]] % 12;
+        const gi1 = this.perm[ii + i1 + this.perm[jj + j1]] % 12;
+        const gi2 = this.perm[ii + 1 + this.perm[jj + 1]] % 12;
+
+        // Calculate the contribution from the three corners
+        let t0 = 0.5 - x0 * x0 - y0 * y0;
+        if (t0 < 0) {
+            n0 = 0.0;
+        } else {
+            t0 *= t0;
+            n0 = t0 * t0 * this.dot(this.grad3[gi0], x0, y0);
+        }
+
+        let t1 = 0.5 - x1 * x1 - y1 * y1;
+        if (t1 < 0) {
+            n1 = 0.0;
+        } else {
+            t1 *= t1;
+            n1 = t1 * t1 * this.dot(this.grad3[gi1], x1, y1);
+        }
+
+        let t2 = 0.5 - x2 * x2 - y2 * y2;
+        if (t2 < 0) {
+            n2 = 0.0;
+        } else {
+            t2 *= t2;
+            n2 = t2 * t2 * this.dot(this.grad3[gi2], x2, y2);
+        }
+
+        // Add contributions from each corner to get the final noise value.
+        // The result is scaled to return values in the interval [-1,1].
+        return 70.0 * (n0 + n1 + n2);
+    }
+
+    dot(g, x, y) {
+        return g[0] * x + g[1] * y;
+    }
+}
+
+
+      const 
+          pi = Math.PI,
+          pow = Math.pow;
+      //VARS FOR CANVAS AND TIMING EVENTS
+      let 
+          r3Time = 0
+          r3TimeMax = Infinity, 
+          r3TimeForward = true,
+          speed = .2,
+          disMult = .001,
+          targetDisMult = .003,
+          sizeMult = 30,
+          targetSzMult = 15,
+          clearScreen = false,
+          showLines = true,
+          showDots = true,
+          inColor = false,
+          automated = true,
+          lightOff = -35;
+
+      ctx.strokeStyle = 'white';
+      ctx.fillStyle = 'white';
+
+      ctx.lineWidth = .5;
+
+
+      const simNoise = new SimplexNoise();
+
+      //SET THE CANVAS ORIGIN TO THE MIDDLE OF THE WINDOW
+          //   ctx.translate(width/2, height/2)   
+
+      //ANIMAITON CYCLE
+
+
+      function render3() {
+
+        if (r3TimeForward && r3Time < r3TimeMax) {
+            r3Time+=speed/50
+        } else if (r3TimeForward && r3Time >= r3TimeMax) {
+            setTimeout(()=>{r3TimeForward = false;}, 100)
+        } else if (!r3TimeForward && r3Time > 1) {
+            r3Time-=speed/50
+        } else if ( r3Time <= 1){
+            r3TimeForward = true;
+            r3Time = 1.1
+            seed = Math.random()  
+        }
+
+        if (automated) {
+            // console.log(lightOff);
+            lightOff = ((Math.sin(r3Time/20))*20) - 20
+
+
+        // const noiseInc = simNoise.noise(r3Time/1000, r3Time/700);
+        // disMult = disMult * 1.0002 < targetDisMult ? disMult * 1.0002 : disMult * .9997; 
+        // sizeMult =  sizeMult * 1.0002 < targetSzMult ? sizeMult * 1.0002 : sizeMult * .9997;
+
+        disMult = Math.sin(r3Time/10)/100
+        // sizeMult =  sizeMult * 1.0002 < targetSzMult ? sizeMult * 1.0002 : sizeMult * .9997;
+
+        }
+
+
+        // if(clearScreen) clearFullScreen()
+
+        // renderMouse()
+            
+        createImg1(r3Time)
+
+        }
+
+        function createImg1(s) { 
+
+        const limits = {
+        sX: 0,
+        eX: width/sizeMult,
+        sY: 0,
+        eY: height/sizeMult,
+        },
+
+        points = [];
+
+        for (let x = limits.sX; x < limits.eX; x++) {
+
+            points.push([]);
+            
+            for (let y = limits.sY; y < limits.eY; y++) {
+
+                const
+                distance = sqrt( pow((x*sizeMult)-(width/2), 2) + pow((y*sizeMult)-(height/2), 2) ),
+                noiseX = (x/sizeMult + seed ) + s/100 + (distance/(113377*disMult)), 
+                noiseY = (y/sizeMult + seed ) + s/100 + (distance/113377*disMult),
+                N1 = simNoise.noise(noiseX, noiseY),
+                N2 = simNoise.noise(noiseY, noiseY),
+                // N1 = Noise(noiseX, noiseY),
+                // N2 = Noise(noiseY, noiseY),
+                radius = 2+N1+N2 > 1 ? 2+N1+N2 : 1,
+                X = x*sizeMult + (N1*sizeMult-N2*sizeMult),
+                Y = y*sizeMult + (N1*sizeMult+N2*sizeMult)*distance*disMult,
+
+                point = {x: X, y: Y, r: radius, dis: distance };
+
+                points[x-limits.sX].push(point)
+                        
+            }
+            
+        }
+
+        renderPoints(points)
+
+        }
+
+        function renderPoints(arr) {
+
+        // const t = Math.ceil(r3Time/sizeMult)
+
+        for (let i = 0; i < arr.length; i++) {
+
+        for (let j = 0; j < arr[i].length; j++) {
+            
+            const p = arr[i][j];
+
+            const colorVar = (p.dis/3)*p.r+144
+
+            // const pColor = `hsl(${colorVar}, 100%, 77%)`;
+            const pColor = `hsl(${colorVar}, ${inColor ? 100 : 0}%, ${(colorVar/4%80)+lightOff}%)`;
+
+
+            if (showLines) {
+                const px = 
+                    arr[i+1] != undefined 
+                    ? arr[i+1][j]   
+                    : false;
+                const py = 
+                    arr[i][j+1] != undefined 
+                    ? arr[i][j+1]   
+                    : false;
+                const pxy = 
+                    arr[i+1] != undefined 
+                    && arr[i+1][j+1] != undefined 
+                    ? arr[i+1][j+1] 
+                    : false;
+
+                ctx.strokeStyle = pColor;                  
+                
+                if (px||py||pxy) {
+                    ctx.beginPath()
+                    ctx.moveTo(p.x,p.y)
+                    if (px) ctx.lineTo(px.x, px.y)
+                    if (py) ctx.lineTo(py.x, py.y)
+                    ctx.lineTo(p.x,p.y)
+                    if (pxy) ctx.lineTo(pxy.x, pxy.y)
+                    ctx.stroke()
+                }
+            }
+
+            if (showDots) {
+                ctx.fillStyle = pColor;                  
+                ctx.beginPath()
+                ctx.arc(p.x, p.y, p.r, 0, pi*2)
+                ctx.fill()
+                
+            }
+
+        }
+        }
+
+        }
+
+        function clearFullScreen() {
+
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+
+        }
+
+        function mapNumber (number, min1, max1, min2, max2) {
+        return ((number - min1) * (max2 - min2) / (max1 - min1) + min2);
+        };
+
+        function ranRange(min, max) {
+        // Ensure min is less than max
+        if (min > max) {
+        [min, max] = [max, min];
+        }
+
+        // Generate a random number within the range
+        const randomNumber = Math.random() * (max - min) + min;
+
+        return randomNumber;
+        }
+
+
+        function findObjectCoords(mouseEvent) {
+
+        let obj = canvas,
+        obj_left = 0,
+        obj_top = 0,
+        xpos,
+        ypos;
+
+        while (obj.offsetParent)
+        {
+        obj_left += obj.offsetLeft;
+        obj_top += obj.offsetTop;
+        obj = obj.offsetParent;
+        }
+        if (mouseEvent)
+        {
+        xpos = mouseEvent.pageX;
+        ypos = mouseEvent.pageY;
+        }
+
+        xpos -= obj_left;
+        ypos -= obj_top;
+
+        mosPos.x = xpos
+        mosPos.y = ypos
+
+        }
+
+
+  </script>
+</body>
+</html>

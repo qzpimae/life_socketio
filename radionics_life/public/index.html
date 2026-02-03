@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game of Life</title>
+  <style>
+    body {
+      background-color: black;
+    }
+    span {
+      color: white;
+    }
+    canvas {
+      border: 1px solid black;
+      background-color: black;
+    }
+
+    #container {
+      align-items: center;
+    }
+
+    #controlButton {
+      font-size: 3em; /* Adjust the font size to make the emoji bigger */
+      padding: 10px 150px; 
+      background-color: rgb(14, 14, 14);
+      align-self: center;
+      /* border-color: #66ff52; */
+      /* border-color: #ff5370; */
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <div>
+      <span id="infoSpan">Loading...</span>
+    </div>
+    <div id="controlsDiv"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.2.0/socket.io.js"></script>
+  <script>
+
+    const socket = io();
+
+    const canvas = document.getElementById('gameCanvas');
+    const controlsDiv = document.getElementById('controlsDiv');
+    const controlButton = document.createElement('button')
+    const ctx = canvas.getContext('2d');
+
+    const cellSize = 5;
+    const numRows = Math.floor(canvas.height / cellSize);
+    const numCols = Math.floor(canvas.width / cellSize);
+
+    let gameState = {};//initializeGameState();
+    let gameStateInitialized = false;
+    let serverUpdated = false;
+    let buttonAvailable = false
+    let buttonTimer = 25
+
+    let frameAdjustThreshold = 5;
+    let clientRefreshInterval = 100;
+    let lastFrameCheck = ''
+    
+    //add control button into DOM
+    controlButton.innerText = '🌱'
+    controlsDiv.appendChild(controlButton)
+    controlButton.id = 'controlButton'
+    controlButton.onclick = () => {
+      buttonAvailable = false
+      buttonTimer = 25
+      // console.log("update");
+      socket.emit('mysteryMod', true)
+    }
+
+
+    let intervalId = setInterval(gameLoop, clientRefreshInterval); // Adjust the interval as needed
+
+    function gameLoop () {
+      if (gameStateInitialized) {
+        if (!serverUpdated) {
+          updateGameState(calculateNextGameState());
+        }
+        draw()
+        serverUpdated = false
+      }
+    }
+
+
+    function draw() {
+      
+      // if (gameState.mods.clear) 
+      ctx.fillStyle =`hsla(0,0%,0%, ${Math.sin(gameState.frame/100) * 0.1})`
+
+
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      
+      for (let i = 0; i < numRows; i++) {
+        for (let j = 0; j < numCols; j++) {
+          const cell = gameState.state[i][j];
+
+          const hue = 120-cell.age / 5
+          const lightness = ((100 - cell.age * 12.75)%50)+50
+          const color = cell.alive ? `hsl(${hue > 0 ? hue : 0}, 50%, ${lightness}%)` : `hsl(130, 50%, 30%)`;;
+          
+          ctx.fillStyle = color;
+          if (cell.alive) ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
+        }
+      }
+      document.getElementById('infoSpan').innerText = `Connected: ${gameState.users} - Generations: ${gameState.frame} - rr ${clientRefreshInterval} - lfc ${lastFrameCheck}`;
+
+      controlButton.style.borderColor = !buttonTimer ? '#66ff52' : '#ff5370'
+      controlButton.disabled = buttonTimer 
+      buttonTimer = buttonTimer > 1 ? buttonTimer-1 : 0
+    }
+
+    
+
+    function updateGameState(newGameState) {
+      gameState = newGameState;
+      // draw();
+    }
+
+    function countNeighbors(x, y) {
+      let count = 0;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          if (i === 0 && j === 0) continue; // Skip the current cell
+          const row = (x + i + numRows) % numRows; // Handle edge wrapping
+          const col = (y + j + numCols) % numCols; // Handle edge wrapping
+          count += gameState.state[row][col].alive;
+        }
+      }
+      return count;
+    }
+
+    function calculateNextGameState() {
+      const nextGameState = [];
+      for (let i = 0; i < numRows; i++) {
+        const newRow = [];
+        for (let j = 0; j < numCols; j++) {
+          const neighbors = countNeighbors(i, j);
+          const currentCell = gameState.state[i][j];
+          if (currentCell.alive) {
+            newRow.push({ alive: neighbors === 2 || neighbors === 3 ? 1 : 0, age: neighbors === 2 || neighbors === 3 ? currentCell.age + 1 : 0 });
+          } else {
+            newRow.push({ alive: neighbors === 3 ? 1 : 0, age: neighbors === 3 ? 1 : 0 });
+          }
+        }
+        nextGameState.push(newRow);
+      }
+      return {
+        users: gameState.users,
+        frame: gameState.frame + 1,
+        state: nextGameState,
+        mods: gameState.mods
+      };
+    }
+
+    socket.on('updateGameState', (newGameState) => {
+
+      lastFrameCheck = gameState.frame + ':' + newGameState.frame
+      // console.log(newGameState);
+      //set true once to inform the client side that the gamestate has be sent at least once by the server
+      gameStateInitialized = true;
+      serverUpdated = true;
+
+      // Calculate the frame difference between server and client
+      const frameDifference = newGameState.frame - gameState.frame;
+
+      //store the current interval to detect change
+      const currentIntervalTime = clientRefreshInterval
+
+      // Adjust client refresh interval based on frame difference
+      if (Math.abs(frameDifference) > frameAdjustThreshold) {
+        // If frame difference is significant, update the client refresh interval
+        if (frameDifference > 0) {
+          // If client is behind the server, decrease refresh interval
+          clientRefreshInterval -= 5; // Decrease refresh interval by 10ms
+        } else {
+          // If client is ahead of the server, increase refresh interval
+          clientRefreshInterval += 5; // Increase refresh interval by 10ms
+        }
+
+        // If client is too far behind or ahead, skip to server's frame and state
+        if (frameDifference > 50 || frameDifference < -50) {
+          gameState = newGameState;
+        }
+      }
+
+        // Check if you need to change the interval time
+      if (clientRefreshInterval != currentIntervalTime) {
+          clearInterval(intervalId); // Clear the existing interval
+
+          // Start a new interval with the updated interval time
+          intervalId = setInterval(gameLoop, clientRefreshInterval);
+      }
+
+      updateGameState(newGameState);
+    });
+
+  </script>
+</body>
+</html>

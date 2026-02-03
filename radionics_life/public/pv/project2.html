@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game of Life</title>
+  <style>
+    body {
+      background-color: black;
+    }
+    span {
+      color: white;
+    }
+    canvas {
+      border: 1px solid black;
+      background-color: rgb(0, 0, 0);
+    }
+
+    #container {
+      align-items: center;
+    }
+
+    #controlButton {
+      font-size: 3em; /* Adjust the font size to make the emoji bigger */
+      padding: 10px 150px; 
+      background-color: rgb(14, 14, 14);
+      align-self: center;
+      /* border-color: #66ff52; */
+      /* border-color: #ff5370; */
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="controlsDiv"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.2.0/socket.io.js"></script>
+  <script>
+
+    const socket = io();
+
+    const canvas = document.createElement('canvas');
+    document.getElementById('container').appendChild(canvas)
+
+    // console.log(window.innerWidth);
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+
+    const controlsDiv = document.getElementById('controlsDiv');
+    const controlButton = document.createElement('button')
+    const ctx = canvas.getContext('2d');
+
+    const numRows = 120;
+    const numCols = 80;
+    const cellSize = ((canvas.width / numCols) - ((canvas.width / numCols) % 1))/1.8;
+    // console.log(cellSize);
+
+    let gameState = {};//initializeGameState();
+    let gameStateInitialized = false;
+    let serverUpdated = false;
+    let buttonAvailable = false
+    let buttonTimer = 25
+
+    let frameAdjustThreshold = 5;
+    let clientRefreshInterval = 100;
+    let lastFrameCheck = ''
+
+
+    let intervalId = setInterval(gameLoop, clientRefreshInterval); // Adjust the interval as needed
+
+    const {round, random, sqrt, PI, floor, sin, cos} = Math;
+        
+        const p = [...Array(512)].map(() => floor(random() * 255)); //used for perlin noise
+
+        let seed = random();
+        //VARS FOR CANVAS AND TIMING EVENTS
+        let width = canvas.width = window.innerWidth,
+            height = canvas.height = window.innerHeight,
+            timeMax = 50,
+            
+            time = timeMax,
+	        timeDec = .5,
+
+            frames = 0,
+
+            strokeW = 3,
+
+            pauseAnimation = false,
+
+            tiltWindow = true,
+
+            colorIndex = 0,
+
+            angleMult = 1,
+
+            startColor = random() * 360,
+            
+            greyScale = true,
+            
+            resetPeriod = false,
+
+            isLight = true;
+
+    function gameLoop () {
+      if (gameStateInitialized) {
+        if (!serverUpdated) {
+          updateGameState(calculateNextGameState());
+        }
+
+             //render BG animation
+            ctx.save()
+            //SET THE CANVAS ORIGIN TO THE MIDDLE OF THE WINDOW
+            ctx.translate(width/2, height/2)
+            render1()
+
+            ctx.restore()
+
+        draw()
+        console.log(isLight, frames, time, clientRefreshInterval);
+        serverUpdated = false
+      }
+    }
+
+
+    function draw() {
+
+   
+
+      ctx.save()
+
+      //render Game of life
+      
+      // if (gameState.mods.clear) 
+      ctx.strokeStyle = 'black'
+      ctx.fillStyle =`hsla(0,0%,0%, ${Math.sin(gameState.frame/100) * 0.1})`
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.translate(
+        (canvas.width - (cellSize * numRows))/2, 
+        (canvas.height - (cellSize * numCols))/2)
+      
+      for (let i = 0; i < numRows; i++) {
+        for (let j = 0; j < numCols; j++) {
+          const cell = gameState.state[i][j];
+
+          const hue = 120-cell.age / 5
+          const lightness = ((100 - cell.age * 12.75)%50)+50
+          const color = cell.alive ? `hsl(${hue > 0 ? hue : 0}, 50%, ${lightness}%)` : `hsl(130, 50%, 30%)`;;
+          
+          ctx.fillStyle = color;
+          if (cell.alive) ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
+        }
+      }
+
+      ctx.restore()
+    }
+
+    
+
+    function updateGameState(newGameState) {
+      gameState = newGameState;
+      // draw();
+    }
+
+    function countNeighbors(x, y) {
+      let count = 0;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          if (i === 0 && j === 0) continue; // Skip the current cell
+          const row = (x + i + numRows) % numRows; // Handle edge wrapping
+          const col = (y + j + numCols) % numCols; // Handle edge wrapping
+          count += gameState.state[row][col].alive;
+        }
+      }
+      return count;
+    }
+
+    function calculateNextGameState() {
+      const nextGameState = [];
+      for (let i = 0; i < numRows; i++) {
+        const newRow = [];
+        for (let j = 0; j < numCols; j++) {
+          const neighbors = countNeighbors(i, j);
+          const currentCell = gameState.state[i][j];
+          if (currentCell.alive) {
+            newRow.push({ alive: neighbors === 2 || neighbors === 3 ? 1 : 0, age: neighbors === 2 || neighbors === 3 ? currentCell.age + 1 : 0 });
+          } else {
+            newRow.push({ alive: neighbors === 3 ? 1 : 0, age: neighbors === 3 ? 1 : 0 });
+          }
+        }
+        nextGameState.push(newRow);
+      }
+      return {
+        users: gameState.users,
+        frame: gameState.frame + 1,
+        state: nextGameState,
+        mods: gameState.mods
+      };
+    }
+
+    socket.on('updateGameState', (newGameState) => {
+
+        lastFrameCheck = gameState.frame + ':' + newGameState.frame
+      // console.log(newGameState);
+      //set true once to inform the client side that the gamestate has be sent at least once by the server
+      gameStateInitialized = true;
+      serverUpdated = true;
+
+      // Calculate the frame difference between server and client
+      const frameDifference = newGameState.frame - gameState.frame;
+
+      //store the current interval to detect change
+      const currentIntervalTime = clientRefreshInterval
+
+      // Adjust client refresh interval based on frame difference
+      if (Math.abs(frameDifference) > frameAdjustThreshold) {
+        // If frame difference is significant, update the client refresh interval
+        if (frameDifference > 0) {
+          // If client is behind the server, decrease refresh interval
+          clientRefreshInterval -= 5; // Decrease refresh interval by 10ms
+        } else {
+          // If client is ahead of the server, increase refresh interval
+          clientRefreshInterval += 5; // Increase refresh interval by 10ms
+        }
+
+        // If client is too far behind or ahead, skip to server's frame and state
+        if (frameDifference > 50 || frameDifference < -50) {
+          gameState = newGameState;
+        }
+
+        clientRefreshInterval = clientRefreshInterval < 10 ? 10 : clientRefreshInterval
+      }
+
+        // Check if you need to change the interval time
+      if (clientRefreshInterval != currentIntervalTime) {
+          clearInterval(intervalId); // Clear the existing interval
+
+          // Start a new interval with the updated interval time
+          intervalId = setInterval(gameLoop, clientRefreshInterval);
+      }
+
+      updateGameState(newGameState);
+    });
+
+
+        
+
+
+                function resetAnimation () {
+                    frames = 0;
+                    isLight = !isLight
+                    timeMax = round(random() * 100 + 150)
+                    time = timeMax;  
+                    seed = random(); 
+                    startColor = random() * 360; 
+                    angleMult = (random() * 3) + .333;
+
+
+                }
+
+                function render1() {
+
+                ctx.strokeStyle = 'white';
+                // ctx.fillStyle = 'white';
+
+                ctx.lineWidth = strokeW;
+
+                frames++;
+
+                if (time > 1) {
+                        createImg(time)
+                        time-=timeDec
+                } else if ( time <= 1){
+                    resetAnimation();
+                   
+                }
+                
+                   
+            }
+
+        function createImg(s) { 
+
+            let 
+                mNoise = perlin2D(s/333+seed,s/333+seed)*11*(1+seed/10),
+                light = isLight ? 100 : 0,
+
+                alpha = sin(time/timeMax) * (mapNumber(time, 0, timeMax, 1, 0));//mapNumber(time, 0, timeMax, 1, 0),
+                
+
+                    // console.log(color)
+
+            if (!isLight) alpha *= -1;
+            ctx.lineWidth = isLight ? .3 : .5;
+
+            const color = `hsla(
+                    ${greyScale ? 0 : s*3+startColor}, 
+                    ${greyScale ? 0 : 70}%, 
+                    ${light}%,
+                    ${alpha})`;
+            
+            ctx.strokeStyle = color;//greyScale ? `hsla(0, 0%, ${light}%)` : `hsl(${s*3+startColor}, 70%, ${light}%, ${alpha})`
+
+            ctx.save()
+
+            if (tiltWindow) ctx.rotate(PI/2);
+                    mNoise/=2;
+                    seven_meta_cubes(s, (mNoise)/2)
+                    seven_meta_cubes(s, (mNoise+PI)/2)
+                    seven_meta_cubes(s, -(mNoise)/2)
+                    seven_meta_cubes(s, -(mNoise+PI)/2)
+
+            ctx.restore()
+        }
+
+        function seven_meta_cubes(s, a) {
+
+            let m = 6.93;
+
+            ctx.save()
+
+                ctx.translate(-s*m/4*1.07, 0)
+                createRombi({size: s, angle: a})
+                ctx.translate(s*m/4*1.07, 0)
+                createRombi({size: s*1.5, angle: a*2})
+                ctx.translate(s*m/4*1.07, 0)
+                createRombi({size: s, angle: a})
+                
+            ctx.restore()
+
+            ctx.save()
+
+                ctx.translate(-s*m/8*1.0714, -s*m*sqrt(3)/8*1.2)
+                createRombi({size: s, angle: a})
+                ctx.translate(0, s*3*1.2)
+                createRombi({size: s, angle: a})
+                
+            ctx.restore()
+
+            ctx.save()
+
+                ctx.translate(s*m/8*1.0714, -s*m*sqrt(3)/8*1.2)
+                createRombi({size: s, angle: a})
+                ctx.translate(0, s*3*1.2)
+                createRombi({size: s, angle: a})
+                
+            ctx.restore()
+
+        }
+
+        function createRombi(rombiObj) {
+            const {size, angle} = rombiObj;
+            ctx.save()
+
+            if (angle) ctx.rotate(angle * angleMult);
+
+            ctx.beginPath()
+                ctx.beginPath()
+                ctx.moveTo(size/2,0);
+                ctx.lineTo(0,-size)
+                ctx.lineTo(-size/2,0)
+                ctx.lineTo(0,size)
+                ctx.lineTo(size/2,0)
+                    ctx.stroke()
+
+            ctx.restore()
+        }
+
+
+        function clearFullScreen() {
+
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.restore();
+            
+        }
+
+        function mapNumber (number, min1, max1, min2, max2) {
+            return ((number - min1) * (max2 - min2) / (max1 - min1) + min2);
+        };
+
+
+        ///PERLIN NOISE (written with chat-gpt)
+        //
+        //
+        //
+        ////
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        ////
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        ////
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        //
+        ////
+        //
+        //
+        //
+        //
+        //
+        //
+
+
+
+
+
+
+        function fade(t) {
+            return t * t * t * (t * (t * 6 - 15) + 10);
+        }
+        
+        function lerp(t, a, b) {
+            return a + t * (b - a);
+        }
+        
+        function grad(hash, x) {
+            const h = hash & 1;
+            return h === 0 ? x : -x;
+        }
+        
+        function grad2(hash, x, y) {
+            const h = hash & 7;
+            const u = h < 4 ? x : y;
+            const v = h < 4 ? y : x;
+            return (h & 1 ? -u : u) + (h & 2 ? -2.0 * v : 2.0 * v);
+        }
+        
+        
+        function perlin2D(x, y) {
+            const X = floor(x) & 255;
+            const Y = floor(y) & 255;
+            x -= floor(x);
+            y -= floor(y);
+            const fadeX = fade(x);
+            const fadeY = fade(y);
+        
+            const a = p[X] + Y;
+            const b = p[X + 1] + Y;
+        
+            return lerp(fadeY, lerp(fadeX, grad(p[a], x), grad(p[b], x - 1)),
+                                lerp(fadeX, grad(p[a + 1], x - 1), grad(p[b + 1], x - 1)));
+        }
+
+  </script>
+</body>
+</html>

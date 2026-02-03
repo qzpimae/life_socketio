@@ -10,7 +10,7 @@ consise steps to run this project on your own. if you have never used git or nod
 
 
 if you'd like to play around with another version, i create this version as a "happy accident" Harry enjoyed the glitch and coined it as being "radionic" 
-check it out [here](https://github.com/qzpimae/life_socketio/radionics_life)
+check it out [here](https://github.com/qzpimae/life_socketio/tree/main/radionics_life)
 
 
 

@@ -109,7 +109,7 @@
           if (cell.alive) ctx.fillRect(j * cellSize, i * cellSize, cellSize, cellSize);
         }
       }
-      document.getElementById('infoSpan').innerText = `Connected: ${gameState.users} - Generations: ${gameState.frame} - rr ${clientRefreshInterval} - lfc ${lastFrameCheck} `;
+      document.getElementById('infoSpan').innerText = `Connected: ${gameState.users} - Generations: ${gameState.frame}  `; //- rr ${clientRefreshInterval} - lfc ${lastFrameCheck}
 
       controlButton.style.borderColor = !buttonTimer ? '#66ff52' : '#ff5370'
       controlButton.disabled = buttonTimer 

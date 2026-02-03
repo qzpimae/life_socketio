@@ -1,5 +1,5 @@
 
-consise steps to run this project on your own. if you have never used git or nodejs, this may be a bit difficult, but that's how you learn!! 
+concise steps to run this project on your own. if you have never used git or nodejs, this may be a bit difficult, but that's how you learn!! 
 
   - install nodejs and git if you havent already
   - clone this repo to your computer [git clone https://github.com/qzpimae/life_socketio.git]

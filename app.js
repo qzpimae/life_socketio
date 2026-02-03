@@ -63,13 +63,13 @@ function initializeGame() {
     frameCount++;
     
     //MAIN LOOP LOG//////////////////////////////////////////////////////a
-    console.log("gqz - cellular automata - Plant/Ed - UsersConnected: " + usersConnected + " _ Generation: " + frameCount + " _ MsSinceLastGen: " + (uTime-uTimeLast));
+    console.log("gqz - cellular automata - Plant/Ed - UsersConnected: " + usersConnected + " _ Generation: " + frameCount ); //+ " _ MsSinceLastGen: " + (uTime-uTimeLast)
 
     globalGameState = calculateNextGameState();
     
     if (frameCount % 8 == 0 )io.emit('updateGameState', globalGameState);
     if (frameCount % 50 == 0) gameMods.clear = !gameMods.clear
-    if (frameCount % 10000 == 0) globalGameState = initializeGameState()
+    // if (frameCount % 10000 == 0) globalGameState = initializeGameState()
     
   }, 100); // Adjust the interval as needed
 }
